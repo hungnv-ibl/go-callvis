@@ -84,13 +84,14 @@ func doAnalysis(buildCtx *build.Context, tests bool, args []string) {
 }
 
 type renderOpts struct {
-	focus   string
-	group   []string
-	ignore  []string
-	include []string
-	limit   []string
-	nointer bool
-	nostd   bool
+	focus       string
+	focusMethod string
+	group       []string
+	ignore      []string
+	include     []string
+	limit       []string
+	nointer     bool
+	nostd       bool
 }
 
 func (a *analysis) render(opts renderOpts) ([]byte, error) {
@@ -122,11 +123,14 @@ func (a *analysis) render(opts renderOpts) ([]byte, error) {
 				return nil, fmt.Errorf("focus failed: %v", err)
 			}
 		}
-		logf("focusing: %v", focusPkg.ImportPath)
+		log.Printf("focusing package: %v", focusPkg.ImportPath)
+	}
+	if opts.focusMethod != "" {
+		log.Printf("focusing method: %v", opts.focusMethod)
 	}
 
 	dot, err := printOutput(a.prog, a.mains[0].Pkg, a.result.CallGraph,
-		focusPkg, opts.limit, opts.ignore, opts.include, opts.group, opts.nostd, opts.nointer)
+		focusPkg, opts.focusMethod, opts.limit, opts.ignore, opts.include, opts.group, opts.nostd, opts.nointer)
 	if err != nil {
 		return nil, fmt.Errorf("processing failed: %v", err)
 	}

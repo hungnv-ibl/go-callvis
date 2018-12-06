@@ -18,6 +18,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	logf("----------------------")
 
 	focus := *focusFlag
+	focusMethod := *focusMethodFlag
 	nostd := *nostdFlag
 	nointer := *nointerFlag
 	group := *groupFlag
@@ -29,6 +30,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		focus = ""
 	} else if f != "" {
 		focus = f
+	}
+	if method := r.FormValue("method"); method != "" {
+		focusMethod = method
 	}
 	if std := r.FormValue("std"); std != "" {
 		nostd = false
@@ -87,13 +91,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	opts := renderOpts{
-		focus:   focus,
-		group:   groupBy,
-		ignore:  ignorePaths,
-		include: includePaths,
-		limit:   limitPaths,
-		nointer: nointer,
-		nostd:   nostd,
+		focus:       focus,
+		focusMethod: focusMethod,
+		group:       groupBy,
+		ignore:      ignorePaths,
+		include:     includePaths,
+		limit:       limitPaths,
+		nointer:     nointer,
+		nostd:       nostd,
 	}
 
 	output, err := Analysis.render(opts)

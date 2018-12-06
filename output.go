@@ -22,7 +22,8 @@ func inStd(node *callgraph.Node) bool {
 }
 
 func printOutput(prog *ssa.Program, mainPkg *types.Package, cg *callgraph.Graph, focusPkg *build.Package,
-	limitPaths, ignorePaths, includePaths []string, groupBy []string, nostd, nointer bool) ([]byte, error) {
+	focusMethod string, limitPaths, ignorePaths, includePaths []string,
+	groupBy []string, nostd, nointer bool) ([]byte, error) {
 	var groupType, groupPkg bool
 	for _, g := range groupBy {
 		if g == "pkg" {
@@ -58,27 +59,30 @@ func printOutput(prog *ssa.Program, mainPkg *types.Package, cg *callgraph.Graph,
 	logf("%d limit prefixes: %v", len(limitPaths), limitPaths)
 	logf("%d ignore prefixes: %v", len(ignorePaths), ignorePaths)
 	logf("%d include prefixes: %v", len(includePaths), includePaths)
+	logf("focusing method: %v", focusMethod)
 	logf("no std packages: %v", nostd)
+
+	var isFocusedMethod = func(f *ssa.Function) bool {
+		return f.Pkg.Pkg.Path() == focusPkg.ImportPath &&
+			(focusMethod == "" || f.Name() == focusMethod)
+	}
 
 	var isFocused = func(edge *callgraph.Edge) bool {
 		caller := edge.Caller
 		callee := edge.Callee
-		if caller.Func.Pkg.Pkg.Path() == focusPkg.ImportPath ||
-			callee.Func.Pkg.Pkg.Path() == focusPkg.ImportPath {
+		if isFocusedMethod(caller.Func) || isFocusedMethod(callee.Func) {
 			return true
 		}
 		fromFocused := false
 		toFocused := false
 		for _, e := range caller.In {
-			if !isSynthetic(e) &&
-				e.Caller.Func.Pkg.Pkg.Path() == focusPkg.ImportPath {
+			if !isSynthetic(e) && isFocusedMethod(e.Caller.Func) {
 				fromFocused = true
 				break
 			}
 		}
 		for _, e := range callee.Out {
-			if !isSynthetic(e) &&
-				e.Callee.Func.Pkg.Pkg.Path() == focusPkg.ImportPath {
+			if !isSynthetic(e) && isFocusedMethod(e.Callee.Func) {
 				toFocused = true
 				break
 			}
@@ -237,6 +241,8 @@ func printOutput(prog *ssa.Program, mainPkg *types.Package, cg *callgraph.Graph,
 			}
 
 			attrs["label"] = label
+			attrs["URL"] = fmt.Sprintf("/?f=%s&amp;method=%s", node.Func.Pkg.Pkg.Path(), node.Func.Name())
+			attrs["tooltip"] = node.Func.String()
 
 			// func styles
 			if node.Func.Parent() != nil {
