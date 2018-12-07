@@ -21,6 +21,35 @@ func inStd(node *callgraph.Node) bool {
 	return pkg.Goroot
 }
 
+func isFocusedMethod(f *ssa.Function, focusPkg *build.Package, focusMethod string) bool {
+	return f.Pkg.Pkg.Path() == focusPkg.ImportPath &&
+		(focusMethod == "" || f.Name() == focusMethod)
+}
+
+func isClosureFocused(node *callgraph.Node, focusPkg *build.Package, focusMethod string, direction, depth int) bool {
+	if isFocusedMethod(node.Func, focusPkg, focusMethod) {
+		return true
+	}
+	if depth <= 0 {
+		return false
+	}
+	if direction == 0 { // trace back from in-comming connection i.e., caller
+		for _, e := range node.In {
+			if !isSynthetic(e) && isClosureFocused(e.Caller, focusPkg, focusMethod, direction, depth-1) {
+				return true
+			}
+		}
+		return false
+	}
+	// trace back from out-going connection i.e., callee
+	for _, e := range node.Out {
+		if !isSynthetic(e) && isClosureFocused(e.Callee, focusPkg, focusMethod, direction, depth-1) {
+			return true
+		}
+	}
+	return false
+}
+
 func printOutput(prog *ssa.Program, mainPkg *types.Package, cg *callgraph.Graph, focusPkg *build.Package,
 	focusMethod string, limitPaths, ignorePaths, includePaths []string,
 	groupBy []string, nostd, nointer bool) ([]byte, error) {
@@ -62,36 +91,13 @@ func printOutput(prog *ssa.Program, mainPkg *types.Package, cg *callgraph.Graph,
 	logf("focusing method: %v", focusMethod)
 	logf("no std packages: %v", nostd)
 
-	var isFocusedMethod = func(f *ssa.Function) bool {
-		return f.Pkg.Pkg.Path() == focusPkg.ImportPath &&
-			(focusMethod == "" || f.Name() == focusMethod)
-	}
-
 	var isFocused = func(edge *callgraph.Edge) bool {
 		caller := edge.Caller
 		callee := edge.Callee
-		if isFocusedMethod(caller.Func) || isFocusedMethod(callee.Func) {
-			return true
-		}
-		fromFocused := false
-		toFocused := false
-		for _, e := range caller.In {
-			if !isSynthetic(e) && isFocusedMethod(e.Caller.Func) {
-				fromFocused = true
-				break
-			}
-		}
-		for _, e := range callee.Out {
-			if !isSynthetic(e) && isFocusedMethod(e.Callee.Func) {
-				toFocused = true
-				break
-			}
-		}
-		if fromFocused && toFocused {
-			logf("edge semi-focus: %s", edge)
-			return true
-		}
-		return false
+
+		return isClosureFocused(caller, focusPkg, focusMethod, 0, 1) ||
+			isClosureFocused(callee, focusPkg, focusMethod, 1, 1)
+
 	}
 
 	var inIncludes = func(node *callgraph.Node) bool {
